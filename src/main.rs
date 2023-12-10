@@ -1,29 +1,40 @@
 use aws_sdk_dynamodb::Client;
 use axum::{
-    extract::Path,
+    extract::{Path, State},
     response::Json,
     routing::{get, post},
     Router,
 };
 use lambda_http::{run, Error};
 use serde::{Deserialize, Serialize};
-use serde_dynamo::to_attribute_value;
+use serde_dynamo::{from_items, to_attribute_value};
 use serde_json::{json, Value};
 use tracing::info;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Item {
-    pub p_type: String,
+    pub account_type: String,
     pub age: String,
     pub username: String,
-    pub first: String,
-    pub last: String,
+    pub first_name: String,
+    pub last_name: String,
 }
 
-async fn insert(Json(item): Json<Item>) -> Json<Item> {
-    let config = aws_config::load_from_env().await;
-    let db_client = Client::new(&config);
+async fn get_all(State(db_client): State<Client>) -> Json<Vec<Item>> {
+    let result = db_client
+        .scan()
+        .table_name("rs-lambda-dynamo-db")
+        .send()
+        .await
+        .unwrap();
 
+    let items_result = result.items().to_vec();
+    let items: Vec<Item> = from_items(items_result).unwrap();
+
+    Json(items)
+}
+
+async fn insert(State(db_client): State<Client>, Json(item): Json<Item>) -> Json<Item> {
     add_item(&db_client, item.clone(), "rs-lambda-dynamo-db")
         .await
         .unwrap();
@@ -55,21 +66,24 @@ async fn main() -> Result<(), Error> {
         .without_time()
         .init();
 
+    let config = aws_config::load_from_env().await;
+    let db_client = Client::new(&config);
+
     let app = Router::new()
         .route("/", get(root))
         .route("/foo", get(get_foo).post(post_foo))
         .route("/foo/:name", post(post_foo_name))
-        .route("/db", post(insert));
+        .route("/db", get(get_all).post(insert).with_state(db_client));
 
     run(app).await
 }
 
 pub async fn add_item(client: &Client, item: Item, table: &str) -> Result<(), Error> {
     let user_av = to_attribute_value(item.username)?;
-    let type_av = to_attribute_value(item.p_type)?;
+    let type_av = to_attribute_value(item.account_type)?;
     let age_av = to_attribute_value(item.age)?;
-    let first_av = to_attribute_value(item.first)?;
-    let last_av = to_attribute_value(item.last)?;
+    let first_av = to_attribute_value(item.first_name)?;
+    let last_av = to_attribute_value(item.last_name)?;
 
     let request = client
         .put_item()
