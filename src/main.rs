@@ -27,10 +27,11 @@ async fn main() -> Result<(), Error> {
         .route("/foo/:name", post(post_foo_name))
         .route(
             "/db",
-            get(web::item_handlers::get_all)
+            get(web::item_handlers::query)
                 .post(web::item_handlers::insert)
                 .with_state(mm),
         );
+    // .route("/db/query", get(web::item_handlers::query));
 
     run(app).await
 }

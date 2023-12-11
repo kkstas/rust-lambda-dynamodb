@@ -11,3 +11,7 @@ pub async fn insert(State(mm): State<ModelManager>, Json(item): Json<Item>) -> J
     mm.put(item).await.unwrap();
     Json(json!({"msg":"Item successfully created."}))
 }
+
+pub async fn query(State(mm): State<ModelManager>) -> Json<String> {
+    Json(mm.query().await)
+}

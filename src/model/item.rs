@@ -1,9 +1,14 @@
+use std::process;
+
 use aws_config::SdkConfig;
+use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use lambda_http::Error;
 use serde::{Deserialize, Serialize};
+use serde_dynamo::from_item;
 use serde_dynamo::from_items;
 use serde_dynamo::to_attribute_value;
+// use serde_dynamo::AttributeValue;
 use tracing::info;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,5 +70,22 @@ impl ModelManager {
         let _resp = request.send().await?;
 
         Ok(())
+    }
+
+    pub async fn query(&self) -> Result<Vec<Item>, Error> {
+        let result = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("username", AttributeValue::S("joe_swanson".to_string()))
+            .send()
+            .await?;
+
+        // let items_result = result.items().to_vec();
+        let x = match result.item() {
+            Some(r) => from_item(r.clone()),
+            None => process::exit(1),
+        }?;
+        Ok(x)
     }
 }
